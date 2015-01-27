@@ -23,4 +23,17 @@ mvn kite:run-tool
 hadoop fs -cat average_ratings/part-r-00000
 ```
 
+### Average ratings using Impala
 
+First we need to tell Impala to refresh its metastore so the new `ratings` table will be
+visible:
+
+```
+impala-shell -q 'invalidate metadata ratings'
+```
+
+Then we can issue queries:
+
+```
+impala-shell -q 'select movie_id, avg(rating) from ratings group by movie_id'
+```
