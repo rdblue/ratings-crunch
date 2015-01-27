@@ -16,15 +16,21 @@
 package org.kitesdk.examples.movies;
 
 import java.io.Serializable;
+import org.apache.crunch.FilterFn;
 import org.apache.crunch.MapFn;
 import org.apache.crunch.PCollection;
 import org.apache.crunch.PTable;
-import org.apache.crunch.types.avro.Avros;
+import org.apache.crunch.Pair;
+import org.apache.crunch.TupleN;
 import org.apache.crunch.util.CrunchTool;
 import org.apache.hadoop.util.ToolRunner;
 import org.kitesdk.data.Dataset;
 import org.kitesdk.data.Datasets;
 import org.kitesdk.data.crunch.CrunchDatasets;
+
+import static org.apache.crunch.types.avro.Avros.ints;
+import static org.apache.crunch.types.avro.Avros.longs;
+import static org.apache.crunch.types.avro.Avros.tuples;
 
 public class AnalyzeRatings extends CrunchTool implements Serializable {
 
@@ -37,13 +43,15 @@ public class AnalyzeRatings extends CrunchTool implements Serializable {
     Dataset<Rating> ratings = Datasets.load("dataset:hive:ratings", Rating.class);
 
     PCollection<Rating> collection = read(CrunchDatasets.asSource(ratings));
-    PTable<Long, Double> table = collection
-        .by(new GetMovieID(), Avros.longs())
-        .mapValues(new GetRating(), Avros.ints())
+    PTable<Long, TupleN> table = collection
+        .by(new GetMovieID(), longs())
+        .mapValues(new GetRating(), ints())
         .groupByKey()
-        .mapValues(new AverageRating(), Avros.doubles());
+        .mapValues(new BuildRatingsHistogram(),
+            tuples(ints(), ints(), ints(), ints(), ints()))
+        .filter(new IdentifyBimodalMovies());
 
-    writeTextFile(table, "average_ratings");
+    writeTextFile(table, "bimodal_movies");
 
     return getPipeline().done().succeeded() ? 0 : 1;
   }
@@ -72,6 +80,56 @@ public class AnalyzeRatings extends CrunchTool implements Serializable {
         count += 1;
       }
       return ((double) sum) / count;
+    }
+  }
+
+  public static class BuildRatingsHistogram extends MapFn<Iterable<Integer>, TupleN> {
+    @Override
+    public TupleN map(Iterable<Integer> ratings) {
+      int[] counts = new int[] {0, 0, 0, 0, 0};
+      for (int rating : ratings) {
+        if (rating <= 5) {
+          counts[rating - 1] += 1;
+        }
+      }
+      return new TupleN(counts[0], counts[1], counts[2], counts[3], counts[4]);
+    }
+  }
+
+  // require a difference of at least 2 to register a change
+  public static final int CHANGE_THRESH = 2;
+
+  public static class IdentifyBimodalMovies extends FilterFn<Pair<Long, TupleN>> {
+    @Override
+    public boolean accept(Pair<Long, TupleN> movieRatingHistograms) {
+      TupleN ratingsHistogram = movieRatingHistograms.second();
+      int last = -1;
+      int totalRatings = 0;
+      boolean foundNegative = false;
+      boolean foundBimodal = false;
+      for (Object countObj : ratingsHistogram.getValues()) {
+        int count = (Integer) countObj;
+        totalRatings += count;
+
+        if (last >= 0) {
+          int diff = count - last;
+          if (foundNegative && diff > CHANGE_THRESH) {
+            foundBimodal = true;
+          }
+          if (diff < -CHANGE_THRESH) {
+            foundNegative = true;
+          }
+        }
+
+        last = count;
+      }
+
+      // filter out some noise
+      if (totalRatings < 20) {
+        return false;
+      }
+
+      return foundBimodal;
     }
   }
 
