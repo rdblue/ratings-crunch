@@ -57,8 +57,9 @@ public class AnalyzeRatings extends CrunchTool implements Serializable {
 
   public static class GetRating extends MapFn<Rating, Integer> {
     @Override
+    @SuppressWarnings("unchecked")
     public Integer map(Rating rating) {
-      return rating.getRating();
+      return rating.getRating().intValue();
     }
   }
 
