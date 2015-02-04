@@ -34,6 +34,8 @@ public class AnalyzeRatings extends CrunchTool implements Serializable {
 
   @Override
   public int run(String[] args) throws Exception {
+    getConf().set("avro.schema.input.key", Rating.getClassSchema().toString());
+
     Dataset<Rating> ratings = Datasets.load("dataset:hive:ratings", Rating.class);
 
     PCollection<Rating> collection = read(CrunchDatasets.asSource(ratings));
