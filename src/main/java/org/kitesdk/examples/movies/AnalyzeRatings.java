@@ -18,6 +18,7 @@ package org.kitesdk.examples.movies;
 import com.google.common.collect.Lists;
 import java.io.Serializable;
 import java.util.Collection;
+import org.apache.avro.mapreduce.AvroJob;
 import org.apache.crunch.FilterFn;
 import org.apache.crunch.MapFn;
 import org.apache.crunch.PCollection;
@@ -46,6 +47,8 @@ public class AnalyzeRatings extends CrunchTool implements Serializable {
 
   @Override
   public int run(String[] args) throws Exception {
+    getConf().set("avro.schema.input.key", Rating.getClassSchema().toString());
+
     // load or create the output dataset
     Dataset<MovieRatingsHistogram> histograms;
     if (Datasets.exists(OUT_DATASET_URI)) {
