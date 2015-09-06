@@ -41,7 +41,7 @@ public class AnalyzeRatings extends CrunchTool implements Serializable {
     PCollection<Rating> collection = read(CrunchDatasets.asSource(ratings));
     PTable<Long, Double> table = collection
         .by(new GetMovieID(), Avros.longs())
-        .mapValues(new GetRating(), Avros.ints())
+        .mapValues(new GetRating(), Avros.floats())
         .groupByKey()
         .mapValues(new AverageRating(), Avros.doubles());
 
@@ -57,24 +57,24 @@ public class AnalyzeRatings extends CrunchTool implements Serializable {
     }
   }
 
-  public static class GetRating extends MapFn<Rating, Integer> {
+  public static class GetRating extends MapFn<Rating, Float> {
     @Override
     @SuppressWarnings("unchecked")
-    public Integer map(Rating rating) {
-      return rating.getRating().intValue();
+    public Float map(Rating rating) {
+      return rating.getRating();
     }
   }
 
-  public static class AverageRating extends MapFn<Iterable<Integer>, Double> {
+  public static class AverageRating extends MapFn<Iterable<Float>, Double> {
     @Override
-    public Double map(Iterable<Integer> ratings) {
-      long sum = 0;
+    public Double map(Iterable<Float> ratings) {
+      double sum = 0;
       int count = 0;
-      for (Integer rating : ratings) {
+      for (Float rating : ratings) {
         sum += rating;
         count += 1;
       }
-      return ((double) sum) / count;
+      return sum / count;
     }
   }
 
